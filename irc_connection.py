@@ -1,4 +1,3 @@
-#!/usr/bin/python3.2
 from socket import socket
 from ssl import wrap_socket
 from sys import stdout
@@ -10,10 +9,10 @@ BUFFER_LENGTH = 1024
 
 
 def do_message(irc_conn, sender, msgtype, to, msg):
-    EventController.fire_event("event_irc_message_plain", irc_conn, sender, msgtype, to, msg)
+    EventController.fire_event("irc_message_plain", irc_conn, sender, msgtype, to, msg)
 
     if msgtype == "376":
-        EventController.fire_event("event_irc_server_successfully_connected", irc_conn)
+        EventController.fire_event("irc_server_successfully_connected", irc_conn)
     pass
 
 
@@ -25,7 +24,7 @@ def do_command(irc_conn, args):
             print("Error: " + ' '.join(args[1:]))
         irc_conn.force_close()
     else:
-        EventController.fire_event("event_irc_command_plain", irc_conn, args)
+        EventController.fire_event("irc_command_plain", irc_conn, args)
     pass
 
 
@@ -79,7 +78,7 @@ class IrcConnection:
         self.recv_handle_thread.start()
         self.recv_thread.start()
 
-        EventController.fire_event("event_irc_server_connect", self)
+        EventController.fire_event("irc_server_connect", self)
         return True
 
     def send_method(self, msg):

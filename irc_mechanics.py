@@ -2,10 +2,7 @@ import inspect
 from sys import stdin
 from irc_connection import IrcConnection
 
-from irc_events import event_irc_command_plain, \
-    event_irc_message_plain, \
-    event_irc_server_connect, \
-    event_irc_server_successfully_connected
+from irc_events import RegisterEvent
 
 
 PASSWORD = "2o9oRsVz3dqsdoMdzYFg"
@@ -30,37 +27,37 @@ class Irc:
             return -1
 
 
-@event_irc_server_successfully_connected
+@RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_login(irc_connection):
     irc_connection.send_method("PRIVMSG NickServ :IDENTIFY " + PASSWORD)
 
 
-@event_irc_server_successfully_connected
+@RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_join(irc_connection):
     for chn in AUTO_JOIN_CHANNELS:
         irc_connection.send_method("JOIN " + chn)
 
 
-@event_irc_server_connect
+@RegisterEvent(event_name='irc_server_connect')
 def send_username(irc_connection):
     irc_connection.send_method("USER rs485 rs485.theZorro266.com * :RS485 Bot")
     irc_connection.send_method("NICK RS485")
     #irc_connection.send_method("PASS theZorro266:aQbmh6VzjSQTDdPF")
 
 
-@event_irc_server_connect
+@RegisterEvent(event_name='irc_server_connect')
 def server_connect_1(irc_connection):
     print(inspect.stack()[0][3] + ": I want to be fired!")
     print(inspect.stack()[0][3] + ": Connection: " + irc_connection.host + ":" + str(irc_connection.port))
 
 
-@event_irc_server_connect
+@RegisterEvent(event_name='irc_server_connect')
 def server_connect_2(irc_connection):
     print(inspect.stack()[0][3] + ": Me too")
     print(inspect.stack()[0][3] + ": Although I dont know what to do with " + irc_connection.host)
 
 
-@event_irc_message_plain
+@RegisterEvent(event_name='irc_message_plain')
 def print_messages(irc_connection, sender, msgtype, to, msg):
     if not SHOW_MOTD and (msgtype == "375" or msgtype == "372" or msgtype == "376"):
         return
@@ -75,7 +72,7 @@ def print_messages(irc_connection, sender, msgtype, to, msg):
         print(" <m- <" + sender + "> (" + msgtype + ")")
 
 
-@event_irc_command_plain
+@RegisterEvent(event_name='irc_command_plain')
 def print_commands(irc_connection, arguments):
     print(" <c- " + '[' + (', '.join(arguments)) + ']')
 
