@@ -33,8 +33,7 @@ def auto_login(irc_connection):
 
 @RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_join(irc_connection):
-    for chn in AUTO_JOIN_CHANNELS:
-        irc_connection.send_method("JOIN " + chn)
+    irc_connection.send_method("JOIN " + ','.join(AUTO_JOIN_CHANNELS))
 
 
 @RegisterEvent(event_name='irc_server_connect')
@@ -45,12 +44,12 @@ def send_username(irc_connection):
 
 @RegisterEvent(event_name='irc_server_notice')
 def print_server_notice(irc_connection, receiver, message):
-    print_user_notice(irc_connection, "SERVER", receiver, message)
+    print("[" + receiver + "] (NOTICE) SERVER: " + message)
 
 
 @RegisterEvent(event_name='irc_user_notice')
 def print_user_notice(irc_connection, user, receiver, message):
-    print("[NOTICE] to " + receiver + " " + user + ": " + message)
+    print("[" + receiver + "] (NOTICE) " + user + ": " + message)
 
 
 @RegisterEvent(event_name='irc_privmsg_received')
