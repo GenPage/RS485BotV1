@@ -14,9 +14,11 @@ def noop():
 
 
 class IrcConnection:
-    def __init__(self, host, port):
+    def __init__(self, irc_obj, host, port, options):
+        self.irc_obj = irc_obj
         self.host = host
         self.port = port
+        self.options = options
 
         self.socket = socket()
         self.ssl_socket = wrap_socket(self.socket)
