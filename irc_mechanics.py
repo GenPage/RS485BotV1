@@ -1,4 +1,3 @@
-import inspect
 from sys import stdin
 from irc_connection import IrcConnection
 
@@ -42,39 +41,46 @@ def auto_join(irc_connection):
 def send_username(irc_connection):
     irc_connection.send_method("USER rs485 rs485.theZorro266.com * :RS485 Bot")
     irc_connection.send_method("NICK RS485")
-    #irc_connection.send_method("PASS theZorro266:aQbmh6VzjSQTDdPF")
 
 
-@RegisterEvent(event_name='irc_server_connect')
-def server_connect_1(irc_connection):
-    print(inspect.stack()[0][3] + ": I want to be fired!")
-    print(inspect.stack()[0][3] + ": Connection: " + irc_connection.host + ":" + str(irc_connection.port))
+@RegisterEvent(event_name='irc_server_notice')
+def print_server_notice(irc_connection, receiver, message):
+    print_user_notice(irc_connection, "SERVER", receiver, message)
 
 
-@RegisterEvent(event_name='irc_server_connect')
-def server_connect_2(irc_connection):
-    print(inspect.stack()[0][3] + ": Me too")
-    print(inspect.stack()[0][3] + ": Although I dont know what to do with " + irc_connection.host)
+@RegisterEvent(event_name='irc_user_notice')
+def print_user_notice(irc_connection, user, receiver, message):
+    print("[NOTICE] to " + receiver + " " + user + ": " + message)
 
 
-@RegisterEvent(event_name='irc_message_plain')
-def print_messages(irc_connection, sender, msgtype, to, msg):
-    if not SHOW_MOTD and (msgtype == "375" or msgtype == "372" or msgtype == "376"):
-        return
-
-    if to != str() and msg != str():
-        print(" <m- <" + sender + "> (" + msgtype + ") to " + to + ": " + msg)
-    elif to != str():
-        print(" <m- <" + sender + "> (" + msgtype + ") to " + to)
-    elif msg != str():
-        print(" <m- <" + sender + "> (" + msgtype + "): " + msg)
-    else:
-        print(" <m- <" + sender + "> (" + msgtype + ")")
+@RegisterEvent(event_name='irc_privmsg_received')
+def print_privmsgs(irc_connection, sender, receiver, message):
+    print("[" + receiver + "] " + sender + ": " + message)
 
 
-@RegisterEvent(event_name='irc_command_plain')
-def print_commands(irc_connection, arguments):
-    print(" <c- " + '[' + (', '.join(arguments)) + ']')
+@RegisterEvent(event_name='irc_user_channel_join')
+def print_user_channel_join(irc_connection, user, channel):
+    print("[" + channel + "] " + user + " joined.")
+
+
+@RegisterEvent(event_name='irc_user_channel_part')
+def print_user_channel_part(irc_connection, user, channel, message):
+    print("[" + channel + "] " + user + " left: " + message)
+
+
+@RegisterEvent(event_name='irc_user_quit')
+def print_user_quit(irc_connection, user, message):
+    print(user + " has left the server: " + message)
+
+
+@RegisterEvent(event_name='irc_user_nick_change')
+def print_user_nick_change(irc_connection, old, new):
+    print(old + " has changed his nick to " + new)
+
+
+@RegisterEvent(event_name='irc_mode_change')
+def print_mode_change(irc_connection, sender, receiver, new_modes):
+    print(sender + " has set the modes: " + receiver + " " + new_modes)
 
 
 ##
