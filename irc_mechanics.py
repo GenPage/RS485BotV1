@@ -5,7 +5,7 @@ from irc_events import RegisterEvent
 
 
 PASSWORD = "2o9oRsVz3dqsdoMdzYFg"
-AUTO_JOIN_CHANNELS = ["#RS485"]
+AUTO_JOIN_CHANNELS = []
 
 SHOW_MOTD = False
 
@@ -33,7 +33,8 @@ def auto_login(irc_connection):
 
 @RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_join(irc_connection):
-    irc_connection.send_method("JOIN " + ','.join(AUTO_JOIN_CHANNELS))
+    if len(AUTO_JOIN_CHANNELS) > 0:
+        irc_connection.send_method("JOIN " + ','.join(AUTO_JOIN_CHANNELS))
 
 
 @RegisterEvent(event_name='irc_server_connect')
