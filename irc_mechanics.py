@@ -1,7 +1,13 @@
 import configparser
+from threading import Lock, Event
 import traceback
+import time
 from irc_connection import IrcConnection
 from irc_events import RegisterEvent
+
+
+MSG_PER_TIME = 4
+MSG_TIME_SECONDS = 1
 
 
 class Irc:
@@ -75,6 +81,34 @@ class Irc:
 
 
 class Message:
+    __server_options_lock = Lock()
+    __server_options = {}
+
+    @staticmethod
+    def count(server):
+        try:
+            Message.__server_options_lock.acquire()
+            if not Message.__server_options.__contains__(server):
+                Message.__server_options[server] = [time.time()]
+            else:
+                count = Message.__server_options[server].__len__()
+                shortest = MSG_TIME_SECONDS  # Per second
+                for i in range(count, 0):
+                    dt = MSG_TIME_SECONDS + Message.__server_options[server][i] - time.time()
+                    if dt >= 0:
+                        if dt < shortest:
+                            shortest = dt
+                    else:
+                        Message.__server_options[server].remove(i)
+                        count -= 1
+                if count >= MSG_PER_TIME:  # Maximum number of messages per second
+                    print("Need to sleep for " + str(shortest) + " secs")
+                    time.sleep(shortest)
+
+                Message.__server_options[server].append(time.time())
+        finally:
+            Message.__server_options_lock.release()
+
     class MessageFormatError(AttributeError):
         def __init__(self, type1=None, type2=None):
             super.__init__(type1, type2)
@@ -115,6 +149,7 @@ class Message:
                     local_recipient_list = self._recipient_list[server]
                     if len(local_recipient_list) > 0:
                         for recipient in local_recipient_list:
+                            Message.count(server)
                             server.send_method("PRIVMSG " + recipient + " :" + self._message)
                     else:
                         raise Message.MessageFormatError("No recipients given")
