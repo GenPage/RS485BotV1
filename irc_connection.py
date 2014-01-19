@@ -660,7 +660,7 @@ class IrcConnection:
                             EventController.fire_event('irc_server_error', self, msg)
                             print("Error: " + msg)
                     else:
-                        EventController.fire_event('irc_command_plain', self, args)
+                        EventController.fire_event('irc_command_plain', self, *args)
                 else:
                     print("Weird empty command:")
                     print("  " + message)
