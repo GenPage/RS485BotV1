@@ -1,19 +1,16 @@
 import configparser
-from sys import stdin
 import traceback
 from irc_connection import IrcConnection
-
 from irc_events import RegisterEvent
 
 
 class Irc:
-    def __init__(self, ident, this_host, nick, realname):
-        self.ident = ident
-        self.this_host = this_host
-        self.nick = nick
-        self.realname = realname
+    def __init__(self):
         self.irc_servers = []
         #self.event_scheduler = scheduler()
+
+    def __str__(self):
+        return "Irc[" + self.irc_servers.__len__() + " Servers]"
 
     def attach(self, host, port, options):
         new_connection = IrcConnection(self, host, port, options)
@@ -25,12 +22,150 @@ class Irc:
             print("Could not connect to the irc server")
             return -1
 
+    @staticmethod
+    def load():
+        try:
+            config = configparser.ConfigParser()
+            config.read_file(open('config.cfg'))
+
+            servers = []
+            if config.has_section("General"):
+                for d in config.sections():
+                    if d != "General":
+                        options = {}
+                        for o in config.options(d):
+                            if o != 'ip' and o != 'port':
+                                options[o] = config.get(d, o)
+                        servers.append((config.get(d, 'ip'), config.getint(d, 'port'), options))
+
+                plugins = (str(config.get('General', 'plugins'))).splitlines()
+
+                irc_obj = Irc()
+
+                for p in plugins:
+                    if p != str():
+                        p = "plugins." + p
+                        try:
+                            _temp_plugin = __import__(p, globals(), fromlist=["plugins"])
+                            _temp_plugin.Plugin(irc_obj)
+                            continue
+                        except EnvironmentError:
+                            print("Could not load " + p)
+                        except IOError:
+                            print("Could not load " + p)
+                        except OSError:
+                            print("Could not load " + p)
+
+                irc_obj.attach(servers[0][0], servers[0][1], servers[0][2])
+                return irc_obj
+        except FileNotFoundError:
+            pass
+        except IOError as err:
+            print("There was a problem with your config.cfg (IOError):")
+            traceback.print_tb(err.__traceback__)
+            return None
+        except KeyError as err:
+            print("There was a problem in your config.cfg")
+            print(err)
+            traceback.print_tb(err.__traceback__)
+            return None
+
+        print("Please create a config.cfg")
+        return None
+
+
+class Message:
+    class MessageFormatError(AttributeError):
+        def __init__(self, type1=None, type2=None):
+            super.__init__(type1, type2)
+
+    class Style:
+        bold = '\u0002'
+        underlined = '\u001F'
+        italic = '\u0016'
+        color = '\u0003'
+        reset = '\u000F'
+
+    class Color:
+        white = 0
+        black = 1
+        blue = 2
+        green = 3
+        red = 4
+        brown = 5
+        purple = 6
+        orange = 7
+        yellow = 8
+        light_green = 9
+        cyan = 10
+        light_cyan = 11
+        light_blue = 12
+        pink = 13
+        grey = 14
+        light_grey = 15
+
+    def __init__(self):
+        self._recipient_list = {}
+        self._message = ""
+
+    def send(self):
+        if len(self._message) > 0:
+            if self._recipient_list.__len__() > 0:
+                for server in self._recipient_list:
+                    local_recipient_list = self._recipient_list[server]
+                    if len(local_recipient_list) > 0:
+                        for recipient in local_recipient_list:
+                            server.send_method("PRIVMSG " + recipient + " :" + self._message)
+                    else:
+                        raise Message.MessageFormatError("No recipients given")
+            else:
+                raise Message.MessageFormatError("No servers given")
+        else:
+            raise Message.MessageFormatError("No message given")
+
+    def add_recipients(self, server, recipient_list):
+        local_recipient_list = []
+        if self._recipient_list.__contains__(server):
+            local_recipient_list = self._recipient_list[server]
+
+        for recipient in recipient_list:
+            if local_recipient_list.__contains__(recipient):
+                raise Message.MessageFormatError("Recipient " + recipient + " already on the list")
+
+            local_recipient_list.append(recipient)
+
+        self._recipient_list[server] = local_recipient_list
+
+    def add_recipient(self, server, recipient):
+        local_recipient_list = []
+        if self._recipient_list.__contains__(server):
+            local_recipient_list = self._recipient_list[server]
+
+        if local_recipient_list.__contains__(recipient):
+            raise Message.MessageFormatError("Recipient already on the list")
+
+        local_recipient_list.append(recipient)
+
+        self._recipient_list[server] = local_recipient_list
+
+    def set_style(self, style, text_color=Color.black, background_color=Color.white):
+        self._message += style
+        if style == Message.Style.color:
+            self._message += str(text_color) + "," + str(background_color)
+
+    def put_message(self, msg):
+        self._message += str(msg)
+
 
 @RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_login(irc_connection):
     if irc_connection.options.__contains__('nickserv_password'):
         if len(irc_connection.options['nickserv_password']) > 0:
-            irc_connection.send_method("PRIVMSG NickServ :IDENTIFY " + irc_connection.options['nickserv_password'])
+            message = Message()
+            message.add_recipient(irc_connection, "NickServ")
+            message.put_message("IDENTIFY ")
+            message.put_message(irc_connection.options['nickserv_password'])
+            message.send()
 
 
 @RegisterEvent(event_name='irc_server_successfully_connected')
@@ -42,8 +177,9 @@ def auto_join(irc_connection):
 
 @RegisterEvent(event_name='irc_server_connect')
 def send_username(irc_connection):
-    irc_connection.send_method("USER " + irc.ident + " " + irc.this_host + " * :" + irc.realname)
-    irc_connection.send_method("NICK " + irc.nick)
+    irc_connection.send_method("USER " + irc_connection.options['ident'] + " " + irc_connection.options['this_host']
+                               + " * :" + irc_connection.options['realname'])
+    irc_connection.send_method("NICK " + irc_connection.options['nick'])
 
 
 @RegisterEvent(event_name='irc_server_notice')
@@ -84,86 +220,4 @@ def print_user_nick_change(irc_connection, old, new):
 @RegisterEvent(event_name='irc_mode_change')
 def print_mode_change(irc_connection, sender, receiver, new_modes):
     print(sender + " has set the modes: " + receiver + " " + new_modes)
-
-
-##
-# Temporary main code here
-##
-
-
-def main():
-    try:
-        config = configparser.ConfigParser()
-        config.read_file(open('config.cfg'))
-
-        servers = []
-        if config.has_section("General"):
-            for d in config.sections():
-                if d != "General":
-                    options = {}
-                    for o in config.options(d):
-                        if o != 'ip' and o != 'port':
-                            options[o] = config.get(d, o)
-                    servers.append((config.get(d, 'ip'), config.getint(d, 'port'), options))
-
-            ident = config.get('General', 'ident')
-            this_host = config.get('General', 'this_host')
-            nick = config.get('General', 'nick')
-            realname = config.get('General', 'realname')
-            plugins = (str(config.get('General', 'plugins'))).splitlines()
-
-            global irc
-            irc = Irc(ident, this_host, nick, realname)
-
-            for p in plugins:
-                if p != str():
-                    p = "plugins." + p
-                    try:
-                        _temp_plugin = __import__(p, globals(), fromlist=["plugins"])
-                        _temp_plugin.Plugin(irc)
-                        continue
-                    except ImportError:
-                        pass
-                    except AttributeError:
-                        pass
-
-                    print("Could not load " + p)
-
-            irc.attach(servers[0][0], servers[0][1], servers[0][2])
-            return irc
-    except FileNotFoundError:
-        pass
-    except IOError:
-        pass
-    except KeyError as err:
-        print("There was a problem in your config.cfg")
-        print(err)
-        traceback.print_tb(err.__traceback__)
-        return None
-
-    print("Please create a config.cfg")
-    return None
-
-
-irc = main()
-if irc is not None:
-    if len(irc.irc_servers) > 0:
-        i = 0
-    else:
-        i = -1
-
-    if i != -1:
-        while True:
-            try:
-                line = stdin.readline()
-            except KeyboardInterrupt:
-                break
-
-            if not line or line.strip() == "^C":
-                print()
-                break
-
-            irc.irc_servers[i].send_method(line)
-
-        irc.irc_servers[i].close()
 

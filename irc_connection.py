@@ -673,7 +673,7 @@ class IrcConnection:
 
     def send_method(self, msg):
         msg = msg.strip()
-        self.ssl_socket.send((msg + '\r\n').encode())
+        self.ssl_socket.send((msg + '\r\n').encode(errors='replace'))
         pass
 
     def recv_method(self):
@@ -681,7 +681,7 @@ class IrcConnection:
         while not self.closing:
             data = self.ssl_socket.recv(BUFFER_LENGTH)
             if data:
-                _read = '\r\n'.join(overflow) + data.decode(stdout.encoding, errors='replace')
+                _read = '\r\n'.join(overflow) + data.decode("utf-8", errors='replace')
                 overflow.clear()
 
                 if len(_read) > 0:
