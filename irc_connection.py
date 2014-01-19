@@ -1,7 +1,7 @@
 from socket import socket
 from ssl import wrap_socket
 from sys import stdout
-from threading import Event, Thread, RLock
+from threading import Event, Thread, Lock
 from builtins import print
 import traceback
 from irc_events import EventController
@@ -15,6 +15,8 @@ def noop():
 
 class IrcConnection:
     def __init__(self, irc_obj, host, port, options):
+        #print("New connection to " + host + ":" + str(port))
+        #traceback.print_stack()
         self.irc_obj = irc_obj
         self.host = host
         self.port = port
@@ -29,8 +31,8 @@ class IrcConnection:
         self.recv_thread.daemon = True
         self.recv_handle_thread = Thread(None, self.recv_handle, "IRC-Recv-Handle-Thread", (), {})
         self.recv_handle_thread.daemon = True
-        self.recv_handle_queue = ""
-        self.recv_handle_queue_rlock = RLock()
+        self.recv_handle_queue = []
+        self.recv_handle_queue_lock = Lock()
         self.recv_handle_event = Event()
 
     def connect(self):
@@ -675,33 +677,42 @@ class IrcConnection:
         pass
 
     def recv_method(self):
+        overflow = []
         while not self.closing:
             data = self.ssl_socket.recv(BUFFER_LENGTH)
             if data:
-                try:
-                    self.recv_handle_queue_rlock.acquire()
-                    self.recv_handle_queue += data.decode(stdout.encoding, errors='replace')
-                    self.recv_handle_event.set()
-                finally:
-                    self.recv_handle_queue_rlock.release()
+                _read = '\r\n'.join(overflow) + data.decode(stdout.encoding, errors='replace')
+                overflow.clear()
+
+                if len(_read) > 0:
+                    try:
+                        self.recv_handle_queue_lock.acquire()
+                        for cmds in _read.splitlines(True):
+                            # Remember: \r\n are only two chars
+                            if len(cmds) > 2:
+                                if cmds[-2:] == '\r\n':
+                                    self.recv_handle_queue.append(cmds.rstrip())
+                                else:
+                                    overflow.append(cmds)
+                    finally:
+                        self.recv_handle_queue_lock.release()
+                        self.recv_handle_event.set()
         pass
 
     def recv_handle(self):
         while not self.closing:
+            self.recv_handle_event.wait(30.0)
+
             if self.recv_handle_event.is_set():
                 try:
-                    self.recv_handle_queue_rlock.acquire()
-                    if self.recv_handle_queue != str():
-                        for msg in self.recv_handle_queue.splitlines():
+                    self.recv_handle_queue_lock.acquire()
+                    if len(self.recv_handle_queue) > 0:
+                        for msg in self.recv_handle_queue:
                             self.receive(msg)
-                        self.recv_handle_queue = ""
-
-                    self.recv_handle_event.clear()
                 finally:
-                    self.recv_handle_queue_rlock.release()
-
-            if not self.recv_handle_event.wait(30.0) and self.recv_handle_queue != str():
-                raise TimeoutException("Had a query and waited for 30 seconds..")
+                    self.recv_handle_queue.clear()
+                    self.recv_handle_event.clear()
+                    self.recv_handle_queue_lock.release()
         pass
 
     def close(self):
