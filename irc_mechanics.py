@@ -28,13 +28,16 @@ class Irc:
 
 @RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_login(irc_connection):
-    irc_connection.send_method("PRIVMSG NickServ :IDENTIFY " + irc_connection.options['nickserv_password'])
+    if irc_connection.options.__contains__('nickserv_password'):
+        if len(irc_connection.options['nickserv_password']) > 0:
+            irc_connection.send_method("PRIVMSG NickServ :IDENTIFY " + irc_connection.options['nickserv_password'])
 
 
 @RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_join(irc_connection):
-    if len(irc_connection.options['autojoin_channels']) > 0:
-        irc_connection.send_method("JOIN " + irc_connection.options['autojoin_channels'])
+    if irc_connection.options.__contains__('autojoin_channels'):
+        if len(irc_connection.options['autojoin_channels']) > 0:
+            irc_connection.send_method("JOIN " + irc_connection.options['autojoin_channels'])
 
 
 @RegisterEvent(event_name='irc_server_connect')
@@ -107,9 +110,24 @@ def main():
             this_host = config.get('General', 'this_host')
             nick = config.get('General', 'nick')
             realname = config.get('General', 'realname')
+            plugins = (str(config.get('General', 'plugins'))).splitlines()
 
             global irc
             irc = Irc(ident, this_host, nick, realname)
+
+            for p in plugins:
+                if p != str():
+                    p = "plugins." + p
+                    try:
+                        _temp_plugin = __import__(p, globals(), fromlist=["plugins"])
+                        _temp_plugin.Plugin(irc)
+                        continue
+                    except ImportError:
+                        pass
+                    except AttributeError:
+                        pass
+
+                    print("Could not load " + p)
 
             irc.attach(servers[0][0], servers[0][1], servers[0][2])
             return irc
