@@ -1,7 +1,7 @@
 from socket import socket
 from ssl import wrap_socket
 from sys import stdout
-from threading import Event, Thread
+from threading import Event, Thread, RLock
 from builtins import print
 import traceback
 from irc_events import EventController
@@ -30,6 +30,7 @@ class IrcConnection:
         self.recv_handle_thread = Thread(None, self.recv_handle, "IRC-Recv-Handle-Thread", (), {})
         self.recv_handle_thread.daemon = True
         self.recv_handle_queue = ""
+        self.recv_handle_queue_rlock = RLock()
         self.recv_handle_event = Event()
 
     def connect(self):
@@ -677,19 +678,27 @@ class IrcConnection:
         while not self.closing:
             data = self.ssl_socket.recv(BUFFER_LENGTH)
             if data:
-                self.recv_handle_queue += data.decode(stdout.encoding, errors='replace')
-                self.recv_handle_event.set()
+                try:
+                    self.recv_handle_queue_rlock.acquire()
+                    self.recv_handle_queue += data.decode(stdout.encoding, errors='replace')
+                    self.recv_handle_event.set()
+                finally:
+                    self.recv_handle_queue_rlock.release()
         pass
 
     def recv_handle(self):
         while not self.closing:
             if self.recv_handle_event.is_set():
-                if self.recv_handle_queue != str():
-                    for msg in self.recv_handle_queue.splitlines():
-                        self.receive(msg)
-                    self.recv_handle_queue = ""
+                try:
+                    self.recv_handle_queue_rlock.acquire()
+                    if self.recv_handle_queue != str():
+                        for msg in self.recv_handle_queue.splitlines():
+                            self.receive(msg)
+                        self.recv_handle_queue = ""
 
-                self.recv_handle_event.clear()
+                    self.recv_handle_event.clear()
+                finally:
+                    self.recv_handle_queue_rlock.release()
 
             if not self.recv_handle_event.wait(30.0) and self.recv_handle_queue != str():
                 raise TimeoutException("Had a query and waited for 30 seconds..")
