@@ -11,7 +11,7 @@ class Plugin:
     @staticmethod
     @RegisterEvent(event_name='irc_message_plain')
     def print_all_messages(irc_connection, sender, msgtype, *args):
-        print("<" + sender + "> (" + msgtype + "): " + ' '.join(args))
+        print("<" + sender + "> (" + msgtype + "): " + ' '.join(args[2:]))
 
     @staticmethod
     @RegisterEvent(event_name='irc_command_plain')
