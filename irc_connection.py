@@ -717,6 +717,7 @@ class IrcConnection:
 
     def close(self):
         if not self.closing:
+            EventController.fire_event('irc_server_disconnect', self)
             self.send_method("QUIT bye")
             self.force_close()
         else:
