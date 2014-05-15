@@ -7,7 +7,7 @@ from irc_events import RegisterEvent
 
 
 MSG_PER_TIME = 4
-MSG_TIME_SECONDS = 1
+MSG_TIME_SECONDS = 3
 
 
 class Irc:
@@ -31,7 +31,7 @@ class Irc:
     @staticmethod
     def load():
         try:
-            config = configparser.ConfigParser()
+            config = configparser.ConfigParser(comment_prefixes=';')
             config.read_file(open('config.cfg'))
 
             servers = []
@@ -41,7 +41,14 @@ class Irc:
                         options = {}
                         for o in config.options(d):
                             if o != 'ip' and o != 'port':
-                                options[o] = config.get(d, o)
+                                if o == 'autojoin_channels':
+                                    options[o] = []
+                                    for chan in str(config.get(d, o)).splitlines():
+                                        chan = chan.rstrip()
+                                        if len(chan) > 0:
+                                            options[o].append(chan)
+                                else:
+                                    options[o] = config.get(d, o)
                         servers.append((config.get(d, 'ip'), config.getint(d, 'port'), options))
 
                 plugins = (str(config.get('General', 'plugins'))).splitlines()
@@ -55,11 +62,7 @@ class Irc:
                             _temp_plugin = __import__(p, globals(), fromlist=["plugins"])
                             _temp_plugin.Plugin(irc_obj)
                             continue
-                        except EnvironmentError:
-                            print("Could not load " + p)
                         except IOError:
-                            print("Could not load " + p)
-                        except OSError:
                             print("Could not load " + p)
 
                 irc_obj.attach(servers[0][0], servers[0][1], servers[0][2])
@@ -82,30 +85,30 @@ class Irc:
 
 class Message:
     __server_options_lock = Lock()
-    __server_options = {}
+    __server_msg_per_time = {}
 
     @staticmethod
     def count(server):
         try:
             Message.__server_options_lock.acquire()
-            if not Message.__server_options.__contains__(server):
-                Message.__server_options[server] = [time.time()]
+            if not Message.__server_msg_per_time.__contains__(server):
+                Message.__server_msg_per_time[server] = [time.time()]
             else:
-                count = Message.__server_options[server].__len__()
-                shortest = MSG_TIME_SECONDS  # Per second
-                for i in range(count, 0):
-                    dt = MSG_TIME_SECONDS + Message.__server_options[server][i] - time.time()
-                    if dt >= 0:
-                        if dt < shortest:
-                            shortest = dt
-                    else:
-                        Message.__server_options[server].remove(i)
-                        count -= 1
-                if count >= MSG_PER_TIME:  # Maximum number of messages per second
-                    print("Need to sleep for " + str(shortest) + " secs")
-                    time.sleep(shortest)
+                count = Message.__server_msg_per_time[server].__len__()
+                if count > 0:
+                    shortest = MSG_TIME_SECONDS
+                    for i in range(count-1, -1, -1):
+                        dt = MSG_TIME_SECONDS + Message.__server_msg_per_time[server][i] - time.time()
+                        if dt < 0:
+                            Message.__server_msg_per_time[server].pop(i)
+                            count -= 1
+                        else:
+                            if dt < shortest:
+                                shortest = dt
+                    if count >= MSG_PER_TIME:
+                        time.sleep(shortest)
 
-                Message.__server_options[server].append(time.time())
+                Message.__server_msg_per_time[server].append(time.time())
         finally:
             Message.__server_options_lock.release()
 
@@ -186,7 +189,7 @@ class Message:
     def set_style(self, style, text_color=Color.black, background_color=Color.white):
         self._message += style
         if style == Message.Style.color:
-            self._message += str(text_color) + "," + str(background_color)
+            self._message += "%02d,%02d" % (text_color, background_color)
 
     def put_message(self, msg):
         self._message += str(msg)
@@ -206,8 +209,8 @@ def auto_login(irc_connection):
 @RegisterEvent(event_name='irc_server_successfully_connected')
 def auto_join(irc_connection):
     if irc_connection.options.__contains__('autojoin_channels'):
-        if len(irc_connection.options['autojoin_channels']) > 0:
-            irc_connection.send_method("JOIN " + irc_connection.options['autojoin_channels'])
+        for chan in irc_connection.options['autojoin_channels']:
+            irc_connection.send_method("JOIN " + chan)
 
 
 @RegisterEvent(event_name='irc_server_connect')
