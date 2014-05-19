@@ -1,9 +1,11 @@
 import configparser
-from threading import Lock, Event
+from threading import Lock
 import traceback
 import time
+
 from irc_connection import IrcConnection
-from irc_events import RegisterEvent
+from irc_events import RegisterEvent, EventController
+from logger import Logger
 
 
 MSG_PER_TIME = 4
@@ -13,6 +15,7 @@ MSG_TIME_SECONDS = 3
 class Irc:
     def __init__(self):
         self.irc_servers = []
+        self.error = False
         #self.event_scheduler = scheduler()
 
     def __str__(self):
@@ -25,8 +28,17 @@ class Irc:
             self.irc_servers.append(new_connection)
             return index
         else:
-            print("Could not connect to the irc server")
+            Logger.print("Could not connect to the irc server")
             return -1
+
+    def set_error(self):
+        self.error = True
+        for server in self.irc_servers:
+            EventController.fire_event('irc_server_disconnect', server)
+            server.send_method("QUIT :Got an error :(")
+
+    def is_alive(self):
+        return self.error is False
 
     @staticmethod
     def load():
@@ -63,23 +75,23 @@ class Irc:
                             _temp_plugin.Plugin(irc_obj)
                             continue
                         except IOError:
-                            print("Could not load " + p)
+                            Logger.print("Could not load " + p)
 
                 irc_obj.attach(servers[0][0], servers[0][1], servers[0][2])
                 return irc_obj
         except FileNotFoundError:
             pass
         except IOError as err:
-            print("There was a problem with your config.cfg (IOError):")
+            Logger.print("There was a problem with your config.cfg (IOError):")
             traceback.print_tb(err.__traceback__)
             return None
         except KeyError as err:
-            print("There was a problem in your config.cfg")
-            print(err)
+            Logger.print("There was a problem in your config.cfg")
+            Logger.print(err)
             traceback.print_tb(err.__traceback__)
             return None
 
-        print("Please create a config.cfg")
+        Logger.print("Please create a config.cfg")
         return None
 
 
@@ -97,7 +109,7 @@ class Message:
                 count = Message.__server_msg_per_time[server].__len__()
                 if count > 0:
                     shortest = MSG_TIME_SECONDS
-                    for i in range(count-1, -1, -1):
+                    for i in range(count - 1, -1, -1):
                         dt = MSG_TIME_SECONDS + Message.__server_msg_per_time[server][i] - time.time()
                         if dt < 0:
                             Message.__server_msg_per_time[server].pop(i)
@@ -222,40 +234,40 @@ def send_username(irc_connection):
 
 @RegisterEvent(event_name='irc_server_notice')
 def print_server_notice(irc_connection, receiver, message):
-    print("[" + receiver + "] (NOTICE) SERVER: " + message)
+    Logger.print("[" + receiver + "] (NOTICE) SERVER: " + message)
 
 
 @RegisterEvent(event_name='irc_user_notice')
 def print_user_notice(irc_connection, user, receiver, message):
-    print("[" + receiver + "] (NOTICE) " + user + ": " + message)
+    Logger.print("[" + receiver + "] (NOTICE) " + user + ": " + message)
 
 
 @RegisterEvent(event_name='irc_privmsg_received')
 def print_privmsgs(irc_connection, sender, receiver, message):
-    print("[" + receiver + "] " + sender + ": " + message)
+    Logger.print("[" + receiver + "] " + sender + ": " + message)
 
 
 @RegisterEvent(event_name='irc_user_channel_join')
 def print_user_channel_join(irc_connection, user, channel):
-    print("[" + channel + "] " + user + " joined.")
+    Logger.print("[" + channel + "] " + user + " joined.")
 
 
 @RegisterEvent(event_name='irc_user_channel_part')
 def print_user_channel_part(irc_connection, user, channel, message):
-    print("[" + channel + "] " + user + " left: " + message)
+    Logger.print("[" + channel + "] " + user + " left: " + message)
 
 
 @RegisterEvent(event_name='irc_user_quit')
 def print_user_quit(irc_connection, user, message):
-    print(user + " has left the server: " + message)
+    Logger.print(user + " has left the server: " + message)
 
 
 @RegisterEvent(event_name='irc_user_nick_change')
 def print_user_nick_change(irc_connection, old, new):
-    print(old + " has changed his nick to " + new)
+    Logger.print(old + " has changed his nick to " + new)
 
 
 @RegisterEvent(event_name='irc_mode_change')
 def print_mode_change(irc_connection, sender, receiver, new_modes):
-    print(sender + " has set the modes: " + receiver + " " + new_modes)
+    Logger.print(sender + " has set the modes: " + receiver + " " + new_modes)
 

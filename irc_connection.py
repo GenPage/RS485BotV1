@@ -1,10 +1,11 @@
 from socket import socket
 from ssl import wrap_socket
-from sys import stdout
 from threading import Event, Thread, Lock
-from builtins import print
 import traceback
+
 from irc_events import EventController
+from logger import Logger
+
 
 BUFFER_LENGTH = 1024
 
@@ -15,7 +16,7 @@ def noop():
 
 class IrcConnection:
     def __init__(self, irc_obj, host, port, options):
-        #print("New connection to " + host + ":" + str(port))
+        #Logger.print("New connection to " + host + ":" + str(port))
         #traceback.print_stack()
         self.irc_obj = irc_obj
         self.host = host
@@ -644,13 +645,13 @@ class IrcConnection:
                         EventController.fire_event('irc_mode_change', self, sender, args[2], args[3])
                         noop()
                     else:
-                        print("Unknown message:")
-                        print("  " + message)
+                        Logger.print("Unknown message:")
+                        Logger.print("  " + message)
 
                     EventController.fire_event('irc_message_plain', self, sender, msgtype, *args)
                 else:
-                    print("Weird empty message:")
-                    print("  " + message)
+                    Logger.print("Weird empty message:")
+                    Logger.print("  " + message)
             else:
                 if len(args) > 0:
                     if args[0] == "PING":
@@ -661,14 +662,14 @@ class IrcConnection:
                             self.force_close()
                         else:
                             EventController.fire_event('irc_server_error', self, msg)
-                            print("Error: " + msg)
+                            Logger.print("Error: " + msg)
                     else:
                         EventController.fire_event('irc_command_plain', self, *args)
                 else:
-                    print("Weird empty command:")
-                    print("  " + message)
+                    Logger.print("Weird empty command:")
+                    Logger.print("  " + message)
         except IndexError as err:
-            print("Cought an error:", err)
+            Logger.print("Cought an error:", err)
             traceback.print_tb(err.__traceback__)
 
     def send_method(self, msg):
@@ -694,6 +695,10 @@ class IrcConnection:
                                     self.recv_handle_queue.append(cmds.rstrip())
                                 else:
                                     overflow.append(cmds)
+                    except:
+                        self.irc_obj.set_error()
+                        self.force_close()
+                        raise
                     finally:
                         self.recv_handle_queue_lock.release()
                         self.recv_handle_event.set()
@@ -709,6 +714,10 @@ class IrcConnection:
                     if len(self.recv_handle_queue) > 0:
                         for msg in self.recv_handle_queue:
                             self.receive(msg)
+                except:
+                    self.irc_obj.set_error()
+                    self.force_close()
+                    raise
                 finally:
                     self.recv_handle_queue.clear()
                     self.recv_handle_event.clear()
@@ -718,10 +727,10 @@ class IrcConnection:
     def close(self):
         if not self.closing:
             EventController.fire_event('irc_server_disconnect', self)
-            self.send_method("QUIT bye")
+            self.send_method("QUIT :bye")
             self.force_close()
         else:
-            print("Already closed")
+            Logger.print("Already closed")
         pass
 
     def force_close(self):

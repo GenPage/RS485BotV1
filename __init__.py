@@ -1,8 +1,13 @@
-from sys import stdin
-from irc_mechanics import Irc
+import sys
 import time
 
+from logger import Logger
+from irc_mechanics import Irc
+
+
 if __name__ == "__main__":
+    Logger.init()
+
     irc = Irc.load()
     if irc is not None:
         if len(irc.irc_servers) > 0:
@@ -11,24 +16,25 @@ if __name__ == "__main__":
             i = -1
 
         if i != -1:
-            if stdin.isatty():
-                while True:
+            if sys.stdin.isatty():
+                while irc.is_alive():
                     try:
-                        line = stdin.readline()
+                        line = sys.stdin.readline()
                     except KeyboardInterrupt:
                         break
 
                     if not line or line.strip() == "^C":
-                        print()
+                        Logger.print()
                         break
 
                     irc.irc_servers[i].send_method(line)
             else:
-                print("No stdin, just sitting around and drinking tea")
-                while True:
+                Logger.print("No stdin, just sitting around and drinking tea")
+                Logger.print()
+                while irc.is_alive():
                     time.sleep(5)
 
             irc.irc_servers[i].close()
     else:
-        print("There was no IRC")
-    print("Closing")
+        Logger.print("There was no IRC")
+    Logger.print("Closing")
