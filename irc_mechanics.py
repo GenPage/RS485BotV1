@@ -136,6 +136,7 @@ class Message:
         reset = '\u000F'
 
     class Color:
+        none = -1
         white = 0
         black = 1
         blue = 2
@@ -198,10 +199,13 @@ class Message:
 
         self._recipient_list[server] = local_recipient_list
 
-    def set_style(self, style, text_color=Color.black, background_color=Color.white):
+    def set_style(self, style, text_color=Color.black, background_color=Color.none):
         self._message += style
         if style == Message.Style.color:
-            self._message += "%02d,%02d" % (text_color, background_color)
+            if background_color != Message.Color.none:
+                self._message += "%02d,%02d" % (text_color, background_color)
+            else:
+                self._message += "%02d" % text_color
 
     def put_message(self, msg):
         self._message += str(msg)
